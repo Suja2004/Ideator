@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-
+const { ensureAuthenticated } = require('../helpers/auth')
 
 // Load the Ideas model
 require('../models/Idea');
@@ -9,8 +9,8 @@ const Ideas = mongoose.model('Ideas');
 
 
 // Idea index page
-router.get('/', (req, res) => {
-    Ideas.find({})
+router.get('/', ensureAuthenticated, (req, res) => {
+    Ideas.find({ user: req.user.id })
         .sort({ date: 'desc' })
         .then(ideas => {
             res.render('ideas/index', { ideas: ideas });
@@ -19,19 +19,25 @@ router.get('/', (req, res) => {
 
 
 // Add idea form
-router.get('/add', (req, res) => {
+router.get('/add', ensureAuthenticated, (req, res) => {
     res.render('ideas/add');
 });
 
 // Edit idea form
-router.get('/edit/:id', (req, res) => {
+router.get('/edit/:id', ensureAuthenticated, (req, res) => {
     Ideas.findOne({
         _id: req.params.id
     })
         .then(idea => {
-            res.render('ideas/edit', {
-                idea: idea
-            });
+            if (idea.user != req.user.id) {
+                req.flash('error_msg', 'Not Authorized');
+                res.redirect('/ideas');
+            }
+            else {
+                res.render('ideas/edit', {
+                    idea: idea
+                });
+            }
         });
 });
 
@@ -54,7 +60,8 @@ router.post('/', (req, res) => {
     } else {
         const newIdea = {
             title: req.body.title,
-            details: req.body.details
+            details: req.body.details,
+            user: req.user.id
         };
         new Ideas(newIdea)
             .save()
@@ -97,7 +104,7 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete Idea
-router.delete('/:id', (req, res) => {
+router.delete('/:id', ensureAuthenticated, (req, res) => {
     Ideas.findByIdAndDelete(req.params.id)
         .then(() => {
             req.flash('success_msg', 'Idea Removed')
